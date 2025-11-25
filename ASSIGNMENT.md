@@ -1,9 +1,6 @@
 # Mixar SDE Technical Assignment
 
-**Project:** Automatic UV Unwrapping with Seam Detection
-
-**Time Estimate:** 18-23 hours
-
+**Project:** Automatic UV Unwrapping with Seam Detection  
 **Deadline:** 7 days from receipt
 
 ---
@@ -24,28 +21,25 @@ Build a production-ready automatic UV unwrapping system that segments 3D meshes 
 
 ## Part 1: C++ Unwrapping Engine (70 points)
 
-### Time Estimate
-8-10 hours
-
 ### What You'll Implement
 
-**Step 1: Topology Builder (1-2 hours)**
+**Step 1: Topology Builder**
 - Build edge list from triangle mesh
 - Find adjacent faces for each edge
 - Validate using Euler characteristic
 
-**Step 2: Seam Detection (2-3 hours)**
+**Step 2: Seam Detection**
 - Spanning tree on dual graph
 - Angular defect computation
 - Seam refinement based on curvature
 
-**Step 3: LSCM Parameterization (4-5 hours)** ← Most complex
+**Step 3: LSCM Parameterization** ← Most complex
 - Build LSCM sparse matrix
 - Set boundary conditions
 - Solve sparse linear system
 - Normalize UVs to [0,1]²
 
-**Step 4: Island Packing (1 hour)**
+**Step 4: Island Packing**
 - Compute bounding boxes
 - Shelf packing algorithm
 - Scale to fit [0,1]²
@@ -82,29 +76,26 @@ part1_cpp/
 
 ## Part 2: Python Batch Processor (35 points)
 
-### Time Estimate
-4-5 hours
-
 ### What You'll Implement
 
-1. **Python Bindings (1 hour)**
+1. **Python Bindings**
    - Wrap C++ library using ctypes or pybind11
    - Handle memory management
 
-2. **Quality Metrics (1.5 hours)**
+2. **Quality Metrics**
    - Stretch: UV→3D Jacobian singular value ratio
    - Coverage: Rasterize UVs, compute % of [0,1]² used
    - Angle Distortion: Max angle difference between 3D and UV
 
-3. **Multi-threaded Processor (1 hour)**
+3. **Multi-threaded Processor**
    - ThreadPoolExecutor for parallel processing
    - Thread-safe progress tracking
 
-4. **CLI Tool (1 hour)**
+4. **CLI Tool**
    - Commands: unwrap, batch, optimize, analyze
    - Progress bars, formatted output
 
-5. **Parameter Optimization (0.5 hours)**
+5. **Parameter Optimization**
    - Grid search over parameter space
 
 ### Resources Provided
@@ -142,35 +133,32 @@ part2_python/
 
 ## Part 3: Blender Add-on (35 points)
 
-### Time Estimate
-6-8 hours
-
 ### What You'll Implement
 
-1. **Main Unwrap Operator (2 hours)**
+1. **Main Unwrap Operator**
    - Extract mesh data directly (no import/export)
    - Call C++ library via Python bindings
    - Apply UVs back to Blender mesh
 
-2. **Caching System (1.5 hours)**
+2. **Caching System**
    - Hash mesh geometry + parameters
    - Store results with timestamp
    - Clean up old cache entries
 
-3. **UI Panel (1 hour)**
+3. **UI Panel**
    - Settings controls
    - Results display
    - Cache status indicator
 
-4. **Seam Editing (1 hour)**
+4. **Seam Editing**
    - Mark/clear seams
    - Invalidate cache when changed
 
-5. **Batch Processing (0.5 hours)**
+5. **Batch Processing**
    - Unwrap all meshes in scene
    - Progress bar
 
-6. **Live Preview (2 hours)**
+6. **Live Preview**
    - Modal operator with timer
    - Debouncing (200ms)
    - FPS display
@@ -270,31 +258,31 @@ part3_blender/
 
 ## Tips for Success
 
-✅ Start with Part 1 - It's the foundation
-✅ Use reference implementations - We provide examples for a reason
-✅ Test incrementally - Don't wait until the end
-✅ Run the test suite frequently - Catch issues early
-✅ Document as you go - Write ALGORITHM.md while coding
-✅ Make small commits — Track incremental progress 
-✅ Ask questions early - Better than wrong assumptions
+✅ Start with Part 1 - It's the foundation  
+✅ Use reference implementations - We provide examples for a reason  
+✅ Test incrementally - Don't wait until the end  
+✅ Run the test suite frequently - Catch issues early  
+✅ Document as you go - Write ALGORITHM.md while coding  
+✅ Make small commits — Track incremental progress  
+✅ Ask questions early - Better than wrong assumptions  
 
 ---
 
 ## Common Pitfalls to Avoid
 
-❌ Don't implement your own sparse matrix solver (use Eigen)
-❌ Don't use import/export for Blender (extract data directly)
-❌ Don't skip testing (run test_unwrap frequently)
-❌ Don't forget memory management (check with valgrind)
-❌ Don't ignore edge cases (degenerate triangles, closed islands)
+❌ Don't implement your own sparse matrix solver (use Eigen)  
+❌ Don't use import/export for Blender (extract data directly)  
+❌ Don't skip testing (run test_unwrap frequently)  
+❌ Don't forget memory management (check with valgrind)  
+❌ Don't ignore edge cases (degenerate triangles, closed islands)  
 
 ---
 
 ## Questions?
 
-**Email:** ajay@mixar.app
-**Response time:** Within 1 business day (weekdays)
-**Ask within:** First 72 hours for best response
+**Email:** ajay@mixar.app  
+**Response time:** Within 1 business day (weekdays)  
+**Ask within:** First 48 hours for best response  
 
 ---
 

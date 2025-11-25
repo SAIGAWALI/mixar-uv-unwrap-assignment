@@ -54,7 +54,7 @@ NOTE: Part 3 (Blender add-on) has no starter code - you create from scratch
 WHAT TO IMPLEMENT
 ================================================================================
 
-PART 1 - C++ ENGINE (70 points, 8-10 hours)
+PART 1 - C++ ENGINE (70 points)
 --------------------------------------------
 Files you'll implement:
   ✏️  src/topology.cpp          - Build edge connectivity
@@ -75,7 +75,7 @@ Reference materials:
   📚  reference/lscm_math.md               - Mathematical background
   📚  reference/lscm_matrix_example.cpp    - LSCM example
 
-PART 2 - PYTHON PROCESSOR (35 points, 4-5 hours)
+PART 2 - PYTHON PROCESSOR (35 points)
 -------------------------------------------------
 Files you'll implement:
   ✏️  uvwrap/bindings.py        - C++ library wrapper
@@ -87,7 +87,7 @@ Files you'll implement:
 Reference materials:
   📚  reference/metrics_spec.md        - Exact metric formulas with Python examples
 
-PART 3 - BLENDER ADD-ON (35 points, 6-8 hours)
+PART 3 - BLENDER ADD-ON (35 points)
 -----------------------------------------------
 ⚠️  NO STARTER CODE PROVIDED - Build from scratch
 
@@ -141,7 +141,7 @@ RECOMMENDED ORDER:
 1. Part 1: C++ Engine (foundation for everything)
    - Start with topology.cpp (simplest)
    - Then seam_detection.cpp
-   - Then lscm.cpp (most complex - budget 4-5 hours)
+   - Then lscm.cpp (most complex)
    - Finally packing.cpp
 
 2. Part 2: Python Processor (builds on Part 1)
@@ -236,7 +236,7 @@ GETTING HELP
 QUESTIONS:
 - Email: ajay@mixar.app
 - Subject: "Assignment Question - [Your Name]"
-- Ask within first 72 hours for best response time
+- Ask within first 48 hours for best response time
 - We respond within 1 business day (weekdays)
 
 DEBUGGING:

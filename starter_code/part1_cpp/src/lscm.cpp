@@ -5,7 +5,6 @@
  * SKELETON - YOU IMPLEMENT THIS
  *
  * This is the MOST COMPLEX part of the assignment.
- * Budget 4-5 hours for this file.
  *
  * IMPORTANT:
  * - See reference/lscm_matrix_example.cpp for matrix assembly example
