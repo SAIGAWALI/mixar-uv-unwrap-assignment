@@ -8,164 +8,90 @@ Processes multiple meshes in parallel using ThreadPoolExecutor.
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
-import time
 import os
-from pathlib import Path
+import time
+from . import bindings, metrics
 
 
 class UnwrapProcessor:
-    """
-    Multi-threaded UV unwrapping batch processor
-
-    Example usage:
-        processor = UnwrapProcessor(num_threads=8)
-        results = processor.process_batch(
-            input_files=["mesh1.obj", "mesh2.obj"],
-            output_dir="output/",
-            params={'angle_threshold': 30.0},
-            on_progress=lambda cur, total, name: print(f"{cur}/{total}")
-        )
-    """
-
     def __init__(self, num_threads=None):
-        """
-        Initialize processor
-
-        Args:
-            num_threads: Number of worker threads (default: CPU count)
-        """
         self.num_threads = num_threads or os.cpu_count()
-        self.progress_lock = threading.Lock()
         self.completed = 0
 
-    def process_batch(self, input_files, output_dir, params,
-                     on_progress=None):
-        """
-        Process multiple meshes in parallel
-
-        Args:
-            input_files: List of input file paths
-            output_dir: Output directory
-            params: Dictionary of unwrap parameters
-            on_progress: Optional callback(current, total, filename)
-
-        Returns:
-            Dictionary with results:
-            {
-                'summary': {
-                    'total': int,
-                    'success': int,
-                    'failed': int,
-                    'total_time': float,
-                    'avg_time': float,
-                    'avg_stretch': float,
-                    'avg_coverage': float,
-                },
-                'files': [
-                    {
-                        'file': str,
-                        'vertices': int,
-                        'triangles': int,
-                        'time': float,
-                        'metrics': {...}
-                    },
-                    ...
-                ]
-            }
-
-        IMPLEMENTATION REQUIRED
-        """
-        # TODO: Implement
-        #
-        # Steps:
-        # 1. Create output directory
-        # 2. Create ThreadPoolExecutor with num_threads
-        # 3. Submit all tasks
-        # 4. Collect results as they complete
-        # 5. Update progress (thread-safe!)
-        # 6. Compute summary statistics
-        # 7. Return results
-
+    def process_batch(self, input_files, output_dir, params, on_progress=None):
         os.makedirs(output_dir, exist_ok=True)
-
         results = []
         total = len(input_files)
         self.completed = 0
+        start = time.time()
 
-        # TODO: YOUR CODE HERE
+        with ThreadPoolExecutor(max_workers=self.num_threads) as ex:
+            futs = {ex.submit(self._run_single, path, output_dir, params): path for path in input_files}
+            for fut in as_completed(futs):
+                inp = futs[fut]
+                try:
+                    r = fut.result()
+                    results.append(r)
+                except Exception as e:
+                    results.append({"file": os.path.basename(inp), "error": str(e)})
+
+                self.completed += 1
+                if on_progress:
+                    on_progress(self.completed, total, os.path.basename(inp))
 
         return {
-            'summary': {},
-            'files': results
+            "summary": self._summary(results, time.time() - start),
+            "files": results,
         }
 
-    def _process_single(self, input_path, output_dir, params):
-        """
-        Process single file (runs in worker thread)
+    def _run_single(self, path, out_dir, params):
+        t0 = time.time()
+        mesh = bindings.load_mesh(path)
+        out, _ = bindings.unwrap(mesh, params)
+        out_path = os.path.join(out_dir, os.path.basename(path))
+        bindings.save_mesh(out, out_path)
 
-        Args:
-            input_path: Input file path
-            output_dir: Output directory
-            params: Unwrap parameters
+        uvs = out.uvs
+        tris = out.triangles
 
-        Returns:
-            Result dictionary
+        avg_s, max_s = metrics.compute_stretch(out, uvs)
+        cov = metrics.compute_coverage(uvs, tris, resolution=512)
+        ang = metrics.compute_angle_distortion(out, uvs)
 
-        IMPLEMENTATION REQUIRED
-        """
-        # TODO: Implement
-        #
-        # Steps:
-        # 1. Load mesh
-        # 2. Unwrap with params
-        # 3. Compute metrics
-        # 4. Save to output_dir
-        # 5. Return result dict with:
-        #      - file name
-        #      - vertex/triangle counts
-        #      - time elapsed
-        #      - quality metrics
+        return {
+            "file": os.path.basename(path),
+            "vertices": out.num_vertices,
+            "triangles": out.num_triangles,
+            "time": time.time() - t0,
+            "metrics": {
+                "avg_stretch": avg_s,
+                "max_stretch": max_s,
+                "coverage": cov,
+                "angle_distortion": ang,
+            },
+        }
 
-        pass  # YOUR CODE HERE
+    def _summary(self, results, total_time):
+        success = [r for r in results if "error" not in r]
+        failure = len(results) - len(success)
 
-    def _compute_summary(self, results, total_time):
-        """
-        Compute summary statistics
+        avg_time = (
+            sum(r["time"] for r in success) / len(success)
+            if success else 0.0
+        )
 
-        Args:
-            results: List of result dictionaries
-            total_time: Total elapsed time
+        if success:
+            avg_stretch = sum(r["metrics"]["avg_stretch"] for r in success) / len(success)
+            avg_cov = sum(r["metrics"]["coverage"] for r in success) / len(success)
+        else:
+            avg_stretch = avg_cov = 0.0
 
-        Returns:
-            Summary dictionary
-        """
-        # TODO: Implement
-        #
-        # Compute:
-        # - Total files
-        # - Successful/failed counts
-        # - Average time per file
-        # - Average stretch
-        # - Average coverage
-
-        pass  # YOUR CODE HERE
-
-
-# Example usage
-if __name__ == "__main__":
-    # Test batch processing
-    processor = UnwrapProcessor(num_threads=4)
-
-    def progress_callback(current, total, filename):
-        pct = int(100 * current / total)
-        print(f"\r[{current}/{total}] {pct}% - {filename}", end='', flush=True)
-
-    # TODO: Test with real files
-    # results = processor.process_batch(
-    #     input_files=[...],
-    #     output_dir="output/",
-    #     params={'angle_threshold': 30.0},
-    #     on_progress=progress_callback
-    # )
-    # print(f"\nCompleted: {results['summary']}")
-    pass
+        return {
+            "total": len(results),
+            "success": len(success),
+            "failed": failure,
+            "total_time": total_time,
+            "avg_time": avg_time,
+            "avg_stretch": avg_stretch,
+            "avg_coverage": avg_cov,
+        }

@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <map>
 #include <vector>
+using namespace std;
 
 /**
  * @brief Edge structure for uniqueness
@@ -78,6 +79,63 @@ TopologyInfo* build_topology(const Mesh* mesh) {
     topo->edge_faces = NULL;
 
     // TODO: Your implementation here
+    map<Edge,EdgeInfo> edge_map;
+    int num_trangles=mesh->num_triangles;
+    int* trangles=mesh->triangles;
+    for(int trangle_ind=0;trangle_ind<num_trangles;trangle_ind++){
+        int a=trangles[trangle_ind*3];
+        int b=trangles[trangle_ind*3+1];
+        int c=trangles[trangle_ind*3+2];
+        Edge E1(a,b);
+        Edge E2(a,c);
+        Edge E3(b,c);
+        if(!edge_map.count(E1)){
+            edge_map[E1].face0=trangle_ind;
+        }
+        else{
+            if(edge_map[E1].face1!=-1){
+                printf("Warning: non-manifold edge (%d,%d)\n", E1.v0, E1.v1);
+            }
+            else{
+            edge_map[E1].face1=trangle_ind;
+            }
+        }
+        if(!edge_map.count(E2)){
+            edge_map[E2].face0=trangle_ind;
+        }
+        else{
+            if(edge_map[E2].face1!=-1){
+                printf("Warning: non-manifold edge (%d,%d)\n", E2.v0, E2.v1);
+            }
+            else{
+            edge_map[E2].face1=trangle_ind;
+            }
+        }
+        if(!edge_map.count(E3)){
+            edge_map[E3].face0=trangle_ind;
+        }
+        else{
+            if(edge_map[E3].face1!=-1){
+                printf("Warning: non-manifold edge (%d,%d)\n", E3.v0, E3.v1);
+            }
+            else{
+            edge_map[E3].face1=trangle_ind;
+            }
+        }
+    }
+    int num_edges=edge_map.size();
+    topo->edges = (int*)malloc(sizeof(int) * 2 * num_edges);
+    topo->edge_faces = (int*)malloc(sizeof(int) * 2 * num_edges);
+    int count=0;
+    for(auto i:edge_map){
+        topo->edges[count]=i.first.v0;
+        topo->edges[count+1]=i.first.v1;
+        topo->edge_faces[count]=i.second.face0;
+        topo->edge_faces[count+1]=i.second.face1;
+        count+=2;
+    }
+    
+    topo->num_edges=num_edges;
 
     return topo;
 }

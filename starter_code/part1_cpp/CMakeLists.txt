@@ -34,7 +34,7 @@ set(SOURCES
 )
 
 # Main library
-add_library(uvunwrap SHARED ${SOURCES})
+add_library(uvunwrap STATIC ${SOURCES})
 
 # Test executable
 add_executable(test_unwrap tests/test_unwrap.cpp)

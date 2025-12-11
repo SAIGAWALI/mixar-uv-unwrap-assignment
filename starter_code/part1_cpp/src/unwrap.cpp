@@ -144,10 +144,7 @@ Mesh* unwrap_mesh(const Mesh* mesh,
             continue;
         }
 
-        // YOUR CODE HERE:
-        // - Call lscm_parameterize
-        // - Build global_to_local mapping
-        // - Copy UVs to result mesh
+        
     }
 
     // STEP 5: Pack islands if requested

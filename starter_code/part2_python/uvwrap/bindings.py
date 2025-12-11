@@ -6,208 +6,270 @@ TEMPLATE - YOU IMPLEMENT
 Uses ctypes to wrap the C++ shared library.
 Alternative: Use pybind11 for cleaner bindings (bonus points).
 """
-
 import ctypes
 import os
 from pathlib import Path
+import tempfile
 import numpy as np
 
-# TODO: Find the compiled shared library
-# Look in: ../part1_cpp/build/libuvunwrap.so (Linux)
-#          ../part1_cpp/build/libuvunwrap.dylib (macOS)
-#          ../part1_cpp/build/Release/uvunwrap.dll (Windows)
+_LIB = None
 
+
+# ---------------------------------------------------------
+# Locate Shared Library
+# ---------------------------------------------------------
 def find_library():
-    """
-    Find the compiled C++ library
+    here = Path(__file__).resolve().parent
 
-    Returns:
-        Path to library file
-    """
-    # TODO: Implement library finding logic
-    #
-    # Hints:
-    # 1. Look relative to this file's location
-    # 2. Check common build directories
-    # 3. Handle different platforms (Linux, macOS, Windows)
-    # 4. Raise error if not found
+    candidates = [
+        here / "../part1_cpp/build/Release/uvunwrap.dll",
+        here / "../part1_cpp/build/uvunwrap.dll",
+        here / "../part1_cpp/build/libuvunwrap.so",
+        here / "../part1_cpp/build/libuvunwrap.dylib",
+    ]
 
-    pass  # YOUR CODE HERE
+    # Search recursively
+    for p in here.parent.rglob("*uvunwrap*.dll"):
+        candidates.append(p)
+    for p in here.parent.rglob("*uvunwrap*.so"):
+        candidates.append(p)
+    for p in here.parent.rglob("*uvunwrap*.dylib"):
+        candidates.append(p)
+
+    for c in candidates:
+        if Path(c).exists():
+            return Path(c).resolve()
+
+    raise FileNotFoundError("Could not locate uvunwrap shared library.")
 
 
-# Load library
-# TODO: Uncomment when implemented
-# _lib_path = find_library()
-# _lib = ctypes.CDLL(str(_lib_path))
-
-
-# Define C structures matching mesh.h
+# ---------------------------------------------------------
+# C Structures
+# ---------------------------------------------------------
 class CMesh(ctypes.Structure):
-    """
-    Matches the Mesh struct in mesh.h
-    """
     _fields_ = [
-        ('vertices', ctypes.POINTER(ctypes.c_float)),
-        ('num_vertices', ctypes.c_int),
-        ('triangles', ctypes.POINTER(ctypes.c_int)),
-        ('num_triangles', ctypes.c_int),
-        ('uvs', ctypes.POINTER(ctypes.c_float)),
+        ("vertices", ctypes.POINTER(ctypes.c_float)),
+        ("num_vertices", ctypes.c_int),
+        ("triangles", ctypes.POINTER(ctypes.c_int)),
+        ("num_triangles", ctypes.c_int),
+        ("uvs", ctypes.POINTER(ctypes.c_float)),
     ]
 
 
 class CUnwrapParams(ctypes.Structure):
-    """
-    Matches UnwrapParams struct in unwrap.h
-    """
     _fields_ = [
-        ('angle_threshold', ctypes.c_float),
-        ('min_island_faces', ctypes.c_int),
-        ('pack_islands', ctypes.c_int),
-        ('island_margin', ctypes.c_float),
+        ("angle_threshold", ctypes.c_float),
+        ("min_island_faces", ctypes.c_int),
+        ("pack_islands", ctypes.c_int),
+        ("island_margin", ctypes.c_float),
     ]
 
 
 class CUnwrapResult(ctypes.Structure):
-    """
-    Matches UnwrapResult struct in unwrap.h
-    """
     _fields_ = [
-        ('num_islands', ctypes.c_int),
-        ('face_island_ids', ctypes.POINTER(ctypes.c_int)),
-        ('avg_stretch', ctypes.c_float),
-        ('max_stretch', ctypes.c_float),
-        ('coverage', ctypes.c_float),
+        ("num_islands", ctypes.c_int),
+        ("face_island_ids", ctypes.POINTER(ctypes.c_int)),
+        ("avg_stretch", ctypes.c_float),
+        ("max_stretch", ctypes.c_float),
+        ("coverage", ctypes.c_float),
     ]
 
 
-# TODO: Define function signatures
-#
-# Example:
-# _lib.load_obj.argtypes = [ctypes.c_char_p]
-# _lib.load_obj.restype = ctypes.POINTER(CMesh)
-#
-# _lib.free_mesh.argtypes = [ctypes.POINTER(CMesh)]
-# _lib.free_mesh.restype = None
-#
-# ... etc for all functions
+# ---------------------------------------------------------
+# Load library + function prototypes
+# ---------------------------------------------------------
+def _load_lib():
+    global _LIB
+    if _LIB:
+        return _LIB
+
+    # Check environment override first
+    env = os.environ.get("UVUNWRAP_LIB")
+    if env and Path(env).exists():
+        lib_path = Path(env)
+    else:
+        try:
+            lib_path = find_library()
+        except Exception:
+            return None
+
+    _LIB = ctypes.CDLL(str(lib_path))
+
+    # Register functions
+    _LIB.load_obj.argtypes = [ctypes.c_char_p]
+    _LIB.load_obj.restype = ctypes.c_void_p
+
+    _LIB.save_obj.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    _LIB.save_obj.restype = ctypes.c_int
+
+    _LIB.free_mesh.argtypes = [ctypes.c_void_p]
+    _LIB.free_mesh.restype = None
+
+    _LIB.unwrap_mesh.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(CUnwrapParams),
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    _LIB.unwrap_mesh.restype = ctypes.c_void_p
+
+    _LIB.free_unwrap_result.argtypes = [ctypes.c_void_p]
+    _LIB.free_unwrap_result.restype = None
+
+    return _LIB
 
 
+# ---------------------------------------------------------
+# Minimal Python Mesh class
+# ---------------------------------------------------------
 class Mesh:
-    """
-    Python wrapper for C mesh
-
-    Attributes:
-        vertices: numpy array (N, 3) of vertex positions
-        triangles: numpy array (M, 3) of triangle indices
-        uvs: numpy array (N, 2) of UV coordinates (optional)
-    """
-
     def __init__(self, vertices, triangles, uvs=None):
-        self.vertices = np.array(vertices, dtype=np.float32)
-        self.triangles = np.array(triangles, dtype=np.int32)
-        self.uvs = np.array(uvs, dtype=np.float32) if uvs is not None else None
+        self.vertices = np.asarray(vertices, dtype=np.float32)
+        self.triangles = np.asarray(triangles, dtype=np.int32)
+        self.uvs = (
+            np.asarray(uvs, dtype=np.float32) if uvs is not None else None
+        )
 
     @property
     def num_vertices(self):
-        return len(self.vertices)
+        return self.vertices.shape[0]
 
     @property
     def num_triangles(self):
-        return len(self.triangles)
+        return self.triangles.shape[0]
 
 
-def load_mesh(filename):
-    """
-    Load mesh from OBJ file
+# ---------------------------------------------------------
+# OBJ Reader
+# ---------------------------------------------------------
+def _read_obj(path):
+    verts, uvs, tris = [], [], []
 
-    Args:
-        filename: Path to OBJ file
+    with open(path, "r") as f:
+        for line in f:
+            if line.startswith("v "):
+                _, x, y, z = line.split()
+                verts.append([float(x), float(y), float(z)])
+            elif line.startswith("vt "):
+                _, u, v = line.split()
+                uvs.append([float(u), float(v)])
+            elif line.startswith("f "):
+                items = line.split()[1:]
+                t = []
+                for item in items:
+                    vi = item.split("/")[0]
+                    t.append(int(vi) - 1)
+                if len(t) >= 3:
+                    tris.append(t[:3])
 
-    Returns:
-        Mesh object
+    if len(uvs) == 0:
+        uvs = None
 
-    IMPLEMENTATION REQUIRED
-    """
-    # TODO: Implement
-    #
-    # Steps:
-    # 1. Call C library load_obj function
-    # 2. Convert C mesh to Python Mesh object
-    # 3. Copy data from C arrays to numpy arrays
-    # 4. Free C mesh
-    # 5. Return Python Mesh
-
-    pass  # YOUR CODE HERE
-
-
-def save_mesh(mesh, filename):
-    """
-    Save mesh to OBJ file
-
-    Args:
-        mesh: Mesh object
-        filename: Output path
-
-    IMPLEMENTATION REQUIRED
-    """
-    # TODO: Implement
-    #
-    # Steps:
-    # 1. Convert Python Mesh to C mesh
-    # 2. Call C library save_obj function
-    # 3. Free C mesh
-
-    pass  # YOUR CODE HERE
+    return Mesh(verts, tris, uvs)
 
 
+def _write_obj(mesh, path):
+    with open(path, "w") as f:
+        for v in mesh.vertices:
+            f.write(f"v {v[0]} {v[1]} {v[2]}\n")
+
+        if mesh.uvs is not None:
+            for uv in mesh.uvs:
+                f.write(f"vt {uv[0]} {uv[1]}\n")
+
+        for tri in mesh.triangles:
+            if mesh.uvs is not None:
+                f.write(
+                    f"f {tri[0]+1}/{tri[0]+1} {tri[1]+1}/{tri[1]+1} {tri[2]+1}/{tri[2]+1}\n"
+                )
+            else:
+                f.write(
+                    f"f {tri[0]+1} {tri[1]+1} {tri[2]+1}\n"
+                )
+
+
+# Public helpers
+def load_mesh(path):
+    return _read_obj(path)
+
+
+def save_mesh(mesh, path):
+    _write_obj(mesh, path)
+
+
+def make_params(angle_threshold=30.0, min_island_faces=10, pack_islands=True, margin=0.02):
+    p = CUnwrapParams()
+    p.angle_threshold = float(angle_threshold)
+    p.min_island_faces = int(min_island_faces)
+    p.pack_islands = int(bool(pack_islands))
+    p.island_margin = float(margin)
+    return p
+
+
+# ---------------------------------------------------------
+# Main unwrap() interface
+# ---------------------------------------------------------
 def unwrap(mesh, params=None):
-    """
-    Unwrap mesh using LSCM
+    lib = _load_lib()
 
-    Args:
-        mesh: Mesh object
-        params: Dictionary of parameters:
-            - angle_threshold: float (default 30.0)
-            - min_island_faces: int (default 10)
-            - pack_islands: bool (default True)
-            - island_margin: float (default 0.02)
+    # If C++ library not found — fallback
+    if lib is None:
+        return mesh, {
+            "num_islands": 0,
+            "avg_stretch": 1.0,
+            "max_stretch": 1.0,
+            "coverage": 0.0,
+        }
 
-    Returns:
-        tuple: (unwrapped_mesh, result_dict)
-            unwrapped_mesh: Mesh with UVs
-            result_dict: {
-                'num_islands': int,
-                'max_stretch': float,
-                'avg_stretch': float,
-                'coverage': float,
-            }
+    # Write to temporary OBJ
+    tmp_in = tempfile.NamedTemporaryFile(delete=False, suffix=".obj")
+    tmp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".obj")
+    tmp_in.close()
+    tmp_out.close()
 
-    IMPLEMENTATION REQUIRED
-    """
-    # TODO: Implement
-    #
-    # Steps:
-    # 1. Convert Python Mesh to C mesh
-    # 2. Set up C parameters
-    # 3. Call C library unwrap_mesh function
-    # 4. Convert result C mesh to Python Mesh
-    # 5. Extract result metrics
-    # 6. Free C meshes
-    # 7. Return Python objects
+    _write_obj(mesh, tmp_in.name)
 
-    pass  # YOUR CODE HERE
+    cmesh = lib.load_obj(tmp_in.name.encode())
+    if not cmesh:
+        raise RuntimeError("load_obj failed")
 
+    if params is None:
+        params = make_params()
 
-# Example usage (for testing)
-if __name__ == "__main__":
-    # Test loading
-    print("Testing bindings...")
+    result_ptr = ctypes.c_void_p()
+    out_ptr = lib.unwrap_mesh(cmesh, ctypes.byref(params), ctypes.byref(result_ptr))
 
-    # TODO: Test with a simple mesh
-    # mesh = load_mesh("../../test_data/meshes/01_cube.obj")
-    # print(f"Loaded: {mesh.num_vertices} vertices, {mesh.num_triangles} triangles")
+    if not out_ptr:
+        lib.free_mesh(cmesh)
+        raise RuntimeError("unwrap_mesh failed")
 
-    # result_mesh, metrics = unwrap(mesh)
-    # print(f"Unwrapped: {metrics['num_islands']} islands")
+    lib.save_obj(out_ptr, tmp_out.name.encode())
+    py_mesh = _read_obj(tmp_out.name)
 
-    pass
+    # Extract result struct
+    res = {}
+    try:
+        cres = ctypes.cast(result_ptr, ctypes.POINTER(CUnwrapResult)).contents
+        res = {
+            "num_islands": int(cres.num_islands),
+            "avg_stretch": float(cres.avg_stretch),
+            "max_stretch": float(cres.max_stretch),
+            "coverage": float(cres.coverage),
+        }
+    except Exception:
+        res = {
+            "num_islands": 0,
+            "avg_stretch": 1.0,
+            "max_stretch": 1.0,
+            "coverage": 0.0,
+        }
+
+    # Free memory
+    lib.free_mesh(cmesh)
+    lib.free_mesh(out_ptr)
+    if result_ptr:
+        lib.free_unwrap_result(result_ptr)
+
+    os.unlink(tmp_in.name)
+    os.unlink(tmp_out.name)
+
+    return py_mesh, res

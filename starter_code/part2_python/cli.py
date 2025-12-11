@@ -13,183 +13,175 @@ Commands:
 import argparse
 import sys
 import os
+import json
 from pathlib import Path
+
+from uvwrap.bindings import unwrap_mesh_file, load_mesh, save_mesh
+from uvwrap.metrics import compute_metrics
+from uvwrap.processor import UnwrapProcessor
+from uvwrap.optimizer import ParameterOptimizer
 
 
 def cmd_unwrap(args):
-    """
-    Unwrap single mesh
+    inp = Path(args.input)
+    out = Path(args.output)
 
-    IMPLEMENTATION REQUIRED
-    """
-    # TODO: Implement
-    #
-    # Steps:
-    # 1. Check input file exists
-    # 2. Load mesh
-    # 3. Unwrap with parameters from args
-    # 4. Save result
-    # 5. Print metrics
-    #
-    # Example output:
-    #   Unwrapping: cube.obj
-    #   ✓ Completed in 1.2s
-    #     Stretch: 1.34
-    #     Coverage: 68%
-    #     Islands: 3
+    if not inp.exists():
+        print(f"Error: {inp} not found.")
+        return 1
 
-    print(f"Unwrapping: {Path(args.input).name}")
-    # YOUR CODE HERE
+    print(f"Unwrapping: {inp.name}")
+
+    params = {
+        "angle_threshold": args.angle_threshold,
+        "min_island_faces": args.min_island,
+        "pack_islands": args.pack,
+        "island_margin": args.margin,
+    }
+
+    mesh, result = unwrap_mesh_file(str(inp), params)
+    save_mesh(mesh, str(out))
+
+    m = compute_metrics(mesh, result)
+
+    print("✓ Completed")
+    print(f"  Stretch: {m['stretch']:.3f}")
+    print(f"  Coverage: {m['coverage'] * 100:.1f}%")
+    print(f"  Islands: {result.num_islands}")
+
     return 0
 
 
 def cmd_batch(args):
-    """
-    Batch process directory
+    indir = Path(args.input_dir)
+    outdir = Path(args.output_dir)
 
-    IMPLEMENTATION REQUIRED
-    """
-    # TODO: Implement
-    #
-    # Steps:
-    # 1. Check input directory exists
-    # 2. Find all .obj files
-    # 3. Create UnwrapProcessor
-    # 4. Process batch with progress bar
-    # 5. Print results
-    # 6. Optionally save report
+    if not indir.exists():
+        print(f"Error: input directory '{indir}' not found.")
+        return 1
+
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    files = sorted([p for p in indir.glob("*.obj")])
+    if not files:
+        print("No OBJ files found.")
+        return 0
 
     print("UV Unwrapping Batch Processor")
     print("=" * 40)
-    # YOUR CODE HERE
+
+    processor = UnwrapProcessor(
+        angle_threshold=args.angle_threshold,
+        threads=args.threads,
+    )
+
+    results = processor.process(files, outdir)
+
+    if args.report:
+        with open(args.report, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"\nReport saved to {args.report}")
+
     return 0
 
 
 def cmd_optimize(args):
-    """
-    Optimize parameters for a mesh
+    inp = Path(args.input)
+    if not inp.exists():
+        print(f"Error: {inp} not found.")
+        return 1
 
-    IMPLEMENTATION REQUIRED
-    """
-    # TODO: Implement
-    #
-    # Steps:
-    # 1. Check input file exists
-    # 2. Run optimizer
-    # 3. Print best parameters
-    # 4. Optionally save params to JSON
-    # 5. Optionally unwrap with best params
+    print(f"Optimizing parameters for: {inp.name}")
 
-    print(f"Optimizing parameters for: {Path(args.input).name}")
-    # YOUR CODE HERE
+    opt = ParameterOptimizer(metric=args.metric)
+    best_params, best_score = opt.run(str(inp))
+
+    print("Best Parameters:")
+    for k, v in best_params.items():
+        print(f"  {k}: {v}")
+
+    print(f"Best Score ({args.metric}): {best_score:.4f}")
+
+    if args.save_params:
+        with open(args.save_params, "w") as f:
+            json.dump(best_params, f, indent=2)
+        print(f"Saved params to {args.save_params}")
+
+    if args.output:
+        mesh, _ = unwrap_mesh_file(str(inp), best_params)
+        save_mesh(mesh, args.output)
+        print(f"Saved optimized output to {args.output}")
+
     return 0
 
 
 def cmd_analyze(args):
-    """
-    Analyze mesh quality
+    inp = Path(args.input)
 
-    IMPLEMENTATION REQUIRED
-    """
-    # TODO: Implement
-    #
-    # Steps:
-    # 1. Check input file exists
-    # 2. Load mesh
-    # 3. Check if has UVs
-    # 4. Compute all quality metrics
-    # 5. Print results
-    # 6. Provide quality assessment
+    if not inp.exists():
+        print(f"Error: {inp} not found.")
+        return 1
 
-    print(f"Analyzing: {Path(args.input).name}")
-    # YOUR CODE HERE
+    mesh = load_mesh(str(inp))
+    if mesh.uvs is None:
+        print("Mesh has no UVs.")
+        return 1
+
+    m = compute_metrics(mesh)
+
+    print(f"Analyzing: {inp.name}")
+    print(f"  Stretch: {m['stretch']:.3f}")
+    print(f"  Coverage: {m['coverage'] * 100:.1f}%")
+    print(f"  Angle distortion: {m['angle_distortion']:.3f}")
+
     return 0
 
 
 def main():
-    """
-    Main CLI entry point
-
-    IMPLEMENTATION REQUIRED
-    """
     parser = argparse.ArgumentParser(
-        description='UV Unwrapping Tool',
+        description="UV Unwrapping Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Unwrap single mesh
-  python cli.py unwrap input.obj output.obj --angle-threshold 30
-
-  # Unwrap without packing
-  python cli.py unwrap input.obj output.obj --no-pack
-
-  # Batch process
-  python cli.py batch meshes/ output/ --threads 8
-
-  # Optimize parameters
-  python cli.py optimize mesh.obj --metric stretch --output best.obj
-
-  # Analyze quality
-  python cli.py analyze mesh.obj
-        """
     )
 
-    subparsers = parser.add_subparsers(dest='command', help='Commands')
+    sub = parser.add_subparsers(dest="cmd")
 
-    # Unwrap command
-    unwrap_parser = subparsers.add_parser('unwrap', help='Unwrap single mesh')
-    unwrap_parser.add_argument('input', help='Input OBJ file')
-    unwrap_parser.add_argument('output', help='Output OBJ file')
-    unwrap_parser.add_argument('--angle-threshold', type=float, default=30.0,
-                              help='Angle threshold in degrees (default: 30)')
-    unwrap_parser.add_argument('--min-island', type=int, default=10,
-                              help='Minimum island size in faces (default: 10)')
-    unwrap_parser.add_argument('--no-pack', action='store_false', dest='pack',
-                              default=True,
-                              help='Disable island packing (default: enabled)')
-    unwrap_parser.add_argument('--margin', type=float, default=0.02,
-                              help='Island margin (default: 0.02)')
+    p = sub.add_parser("unwrap")
+    p.add_argument("input")
+    p.add_argument("output")
+    p.add_argument("--angle-threshold", type=float, default=30.0)
+    p.add_argument("--min-island", type=int, default=10)
+    p.add_argument("--no-pack", dest="pack", action="store_false")
+    p.add_argument("--margin", type=float, default=0.02)
+    p.set_defaults(func=cmd_unwrap)
 
-    # Batch command
-    batch_parser = subparsers.add_parser('batch', help='Batch process directory')
-    batch_parser.add_argument('input_dir', help='Input directory')
-    batch_parser.add_argument('output_dir', help='Output directory')
-    batch_parser.add_argument('--threads', type=int, default=None,
-                             help='Number of threads (default: CPU count)')
-    batch_parser.add_argument('--angle-threshold', type=float, default=30.0,
-                             help='Angle threshold in degrees')
-    batch_parser.add_argument('--report', help='Save metrics to JSON file')
+    p = sub.add_parser("batch")
+    p.add_argument("input_dir")
+    p.add_argument("output_dir")
+    p.add_argument("--threads", type=int, default=None)
+    p.add_argument("--angle-threshold", type=float, default=30.0)
+    p.add_argument("--report")
+    p.set_defaults(func=cmd_batch)
 
-    # Optimize command
-    opt_parser = subparsers.add_parser('optimize', help='Optimize parameters')
-    opt_parser.add_argument('input', help='Input OBJ file')
-    opt_parser.add_argument('--output', help='Output OBJ file with best params')
-    opt_parser.add_argument('--metric', choices=['stretch', 'coverage', 'angle_distortion'],
-                           default='stretch', help='Metric to optimize')
-    opt_parser.add_argument('--save-params', help='Save best params to JSON')
+    p = sub.add_parser("optimize")
+    p.add_argument("input")
+    p.add_argument("--metric", choices=["stretch", "coverage", "angle_distortion"],
+                  default="stretch")
+    p.add_argument("--save-params")
+    p.add_argument("--output")
+    p.set_defaults(func=cmd_optimize)
 
-    # Analyze command
-    analyze_parser = subparsers.add_parser('analyze', help='Analyze mesh quality')
-    analyze_parser.add_argument('input', help='Input OBJ file with UVs')
+    p = sub.add_parser("analyze")
+    p.add_argument("input")
+    p.set_defaults(func=cmd_analyze)
 
     args = parser.parse_args()
 
-    if not args.command:
+    if not args.cmd:
         parser.print_help()
         return 1
 
-    # Route to command handlers
-    if args.command == 'unwrap':
-        return cmd_unwrap(args)
-    elif args.command == 'batch':
-        return cmd_batch(args)
-    elif args.command == 'optimize':
-        return cmd_optimize(args)
-    elif args.command == 'analyze':
-        return cmd_analyze(args)
-
-    return 0
+    return args.func(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
